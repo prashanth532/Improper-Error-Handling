@@ -1,0 +1,65 @@
+******************************************************************
+What to Report in Source Code Review for Improper Error Handling?
+******************************************************************
+1. Detailed error messages exposed to users (information leakage).
+2. Revealing system internals like stack traces, SQL queries, file paths, etc. to attackers.
+3. Failing to handle exceptions gracefully, leading to crashes or unexpected behavior.
+4. Not logging important errors for backend visibility (but exposing them to users).
+5. Logging sensitive information (like passwords, tokens) in plain logs.
+******************************************************************
+Why Improper Error Handling is Dangerous?
+******************************************************************
+Attackers can learn about the system, databases, file paths, and plan further attacks (like SQL Injection, Path Traversal, etc.).
+May expose user data, session IDs, tokens.
+Application may crash, affecting availability (DoS attack).
+If errors are not logged properly, it's difficult to detect and investigate attacks.
+******************************************************************
+Improper Error Handling Example
+******************************************************************
+try {
+    // Example: User login query
+    String sql = "SELECT * FROM users WHERE username = ?";
+    PreparedStatement pstmt = conn.prepareStatement(sql);
+    pstmt.setString(1, username);
+    ResultSet rs = pstmt.executeQuery();
+
+    if (!rs.next()) {
+        System.out.println("User not found"); // Ok message (fine)
+    }
+} catch (SQLException e) {
+    // ❌ BAD: Printing raw error message and stack trace
+    e.printStackTrace();  // Leak of internal code details
+    System.out.println("Database Error: " + e.getMessage()); // Leak of DB error
+}
+******************************************************************
+What's Wrong Here?
+******************************************************************
+e.printStackTrace() will expose full stack trace — internal class names, methods, line numbers.
+System.out.println("Database Error: " + e.getMessage()) might expose SQL error details like query structure, syntax, or DB name.
+Attacker can trigger specific errors (e.g., malformed inputs) to get internal information — Information Disclosure Vulnerability.
+******************************************************************
+Correct (Safe) Java Code Example (Proper Error Handling)
+******************************************************************
+try {
+    // Safe login query
+    String sql = "SELECT * FROM users WHERE username = ?";
+    PreparedStatement pstmt = conn.prepareStatement(sql);
+    pstmt.setString(1, username);
+    ResultSet rs = pstmt.executeQuery();
+
+    if (!rs.next()) {
+        System.out.println("Invalid username or password."); // Generic message
+    }
+} catch (SQLException e) {
+    // ✅ GOOD: Log error internally, but show generic message to user
+    logger.error("Database error while user login: {}", e.getMessage()); // Proper log (backend)
+    System.out.println("An unexpected error occurred. Please try again later."); // Safe for user
+}
+
+******************************************************************
+Why This Is Safe?
+******************************************************************
+No sensitive info shown to user — only generic error message.
+Errors are logged properly on server/backend for investigation.
+Attacker cannot learn about database, system paths, query details — prevents information leakage.
+
